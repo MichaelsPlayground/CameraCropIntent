@@ -4,16 +4,13 @@ import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.ActivityNotFoundException;
-import android.content.ComponentName;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.content.pm.ResolveInfo;
 import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
-import android.graphics.ImageDecoder;
 import android.graphics.Matrix;
 import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraManager;
@@ -23,7 +20,6 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.os.ParcelFileDescriptor;
 import android.provider.MediaStore;
-
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
@@ -34,7 +30,6 @@ import android.widget.Toast;
 import androidx.activity.result.ActivityResult;
 import androidx.activity.result.ActivityResultCallback;
 import androidx.activity.result.ActivityResultLauncher;
-import androidx.activity.result.PickVisualMediaRequest;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
@@ -45,35 +40,16 @@ import androidx.core.content.FileProvider;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileDescriptor;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.text.SimpleDateFormat;
 import java.util.Date;
-import java.util.List;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivityV2 extends AppCompatActivity {
 
-    private final String TAG = "MainActivity";
+    private final String TAG ="MainActivity";
     private Button openFromGallery, takePhoto, cropImage;
     private ImageView ivFull, ivCrop;
     private TextView tvFull, tvCrop;
-
-
-    public final String APP_TAG = "crop";
-    public String intermediateName = "1.jpg";
-    public String resultName = "2.jpg";
-
-    Uri intermediateProvider;
-    Uri resultProvider;
-
-    ActivityResultLauncher<Intent> cameraActivityResultLauncher;
-    ActivityResultLauncher<Intent> galleryActivityResultLauncher;
-    ActivityResultLauncher<Intent> cropActivityResultLauncher;
-    ActivityResultLauncher<PickVisualMediaRequest> pickMediaActivityResultLauncher;
-
-
     private Uri imageUriFull, imageUriFullCached, imageUriCrop;
 
 
@@ -84,6 +60,7 @@ public class MainActivity extends AppCompatActivity {
             btn05, btn06, btn07, btn08;
 
     TextView tvG02;
+
 
 
     public static final int CAMERA_IMAGE_PERM_CODE = 101;
@@ -126,8 +103,12 @@ public class MainActivity extends AppCompatActivity {
         openFromGallery.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-
-                onPickPhoto();
+                Intent intent = new Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
+                /*
+                intent.addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+                intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                intent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION);*/
+                galleryActivityResultLauncher.launch(intent);
             }
         });
 
@@ -137,8 +118,8 @@ public class MainActivity extends AppCompatActivity {
                 Log.d(TAG, "takePhoto.setOnClickListener");
 
                 // Create the camera_intent ACTION_IMAGE_CAPTURE it will open the camera for capture the image
-                //openCamera();
-                onLaunchCamera();
+                openCamera();
+
             }
         });
 
@@ -146,260 +127,195 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onClick(View view) {
                 Log.d(TAG, "cropImage.setOnClickListener");
-                //cropTheImage();
-                onCropImage();
+                cropTheImage();
             }
         });
 
 
-        cameraActivityResultLauncher = registerForActivityResult(
-                new ActivityResultContracts.StartActivityForResult(),
-                result -> {
-                    if (result.getResultCode() == Activity.RESULT_OK) {
-                        Bitmap takenImage = loadFromUri(intermediateProvider);
-                        ivFull.setImageBitmap(getResizedBitmap(takenImage, 400));
-                        onCropImage();
+/*
+        takePhoto.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                Log.d(TAG, "takePhoto.setOnClickListener");
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M){
+                    Log.d(TAG, "if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)");
+                    if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_DENIED || checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                            == PackageManager.PERMISSION_DENIED){
+                        Log.d(TAG, "if (checkSelfPermission(Manifest.permission.CAMERA)");
+                        String[] permission = {Manifest.permission.CAMERA, Manifest.permission.WRITE_EXTERNAL_STORAGE};
+                        Log.d(TAG, "requestPermissions(permission, 112)");
+                        requestPermissions(permission, 112);
                     }
-                });
-
-        galleryActivityResultLauncher = registerForActivityResult(
-                new ActivityResultContracts.StartActivityForResult(),
-                result -> {
-                    if (result.getResultCode() == Activity.RESULT_OK && result.getData() != null) {
-                        saveBitmapFileToIntermediate(result.getData().getData());
-                        Bitmap selectedImage = loadFromUri(intermediateProvider);
-
-                        ivFull.setImageBitmap(getResizedBitmap(selectedImage, 400));
-                        onCropImage();
+                    else {
+                        Log.d(TAG, "else if (checkSelfPermission(Manifest.permission.CAMERA)");
+                        openCamera();
                     }
-                });
-
-        cropActivityResultLauncher = registerForActivityResult(
-                new ActivityResultContracts.StartActivityForResult(),
-                result -> {
-                    if (result.getResultCode() == Activity.RESULT_OK) {
-                        Bitmap cropImage = loadFromUri(resultProvider);
-
-                        ivCrop.setImageBitmap(getResizedBitmap(cropImage, 400));
-                    }
-                });
-
-        // android 13 photo picker
-        // Registers a photo picker activity launcher in single-select mode.
-        // https://developer.android.com/training/data-storage/shared/photopicker
-        pickMediaActivityResultLauncher =
-                registerForActivityResult(new ActivityResultContracts.PickVisualMedia(), uri -> {
-                    // Callback is invoked after the user selects a media item or closes the
-                    // photo picker.
-                    if (uri != null) {
-                        Log.d(TAG, "Selected URI: " + uri);
-                        imageUriFull = uri;
-
-                        saveBitmapFileToIntermediate(imageUriFull);
-                        Bitmap inputImage = loadFromUri(intermediateProvider);
-
-
-
-
-
-                        //ivFull.setImageURI(uri);
-                        //Bitmap inputImage=((BitmapDrawable) ivFull.getDrawable()).getBitmap();
-
-                        //Bitmap inputImage = uriToBitmap(uri);
-                        Bitmap rotated = rotateBitmap(inputImage, getCameraOrientation());
-
-                        ivFull.setImageBitmap(getResizedBitmap(inputImage, 400));
-                        //ivFull.setImageBitmap(rotated);
-
-                        // other way for rotating
-                        //Bitmap inputImage = uriToBitmap(uri);
-                        //Bitmap rotated = rotateBitmap2(uri, inputImage);
-                        //ivFull.setImageBitmap(rotated);
-
-                        int height = ivFull.getHeight();
-                        int width = ivFull.getWidth();
-
-                        //Bitmap inputImage = uriToBitmap(imageUriFull);
-                        String imageInfo = "height: " + height + " width: " + width + " resolution: " + (height * width) +
-                                "\nOriginal Bitmap height: " + inputImage.getHeight() + " width: " + inputImage.getWidth() +
-                                " res: " + (inputImage.getHeight() * inputImage.getWidth());
-                        tvFull.setText(imageInfo);
-
-                        //saveBitmapFileToIntermediate(imageUriFull);
-
-                    } else {
-                        Log.d(TAG, "No media selected");
-                    }
-                });
-
-    }
-
-    public void onLaunchCamera() {
-        Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
-        File photoFile = getPhotoFileUri(intermediateName);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N)
-            intermediateProvider = FileProvider.getUriForFile(MainActivity.this, "de.androidcrypto.cameracropintent" + ".provider", photoFile);
-        // intermediateProvider = FileProvider.getUriForFile(MainActivity.this, "de.androidcrypto.cameracropintent" + ".provider", imageFile);
-        else
-            intermediateProvider = Uri.fromFile(photoFile);
-        intent.putExtra(MediaStore.EXTRA_OUTPUT, intermediateProvider);
-        if (intent.resolveActivity(getPackageManager()) != null) {
-            cameraActivityResultLauncher.launch(intent);
-        }
-    }
-
-    // Trigger gallery selection for a photo
-    public void onPickPhoto() {
-
-
-
-        // Launch the photo picker and let the user choose only images.
-        https:
-//developer.android.com/training/data-storage/shared/photopicker
-
-        pickMediaActivityResultLauncher.launch(new PickVisualMediaRequest.Builder()
-                .setMediaType(ActivityResultContracts.PickVisualMedia.ImageOnly.INSTANCE)
-                .build());
-
-        /*
-        Intent intent = new Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
-        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-        intent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
-        if (intent.resolveActivity(getPackageManager()) != null) {
-            galleryActivityResultLauncher.launch(intent);
-        }
-
-         */
-    }
-
-    private void onCropImage() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            grantUriPermission("com.android.camera", intermediateProvider, Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            Intent intent = new Intent("com.android.camera.action.CROP");
-            intent.setDataAndType(intermediateProvider, "image/*");
-
-            List<ResolveInfo> list = getPackageManager().queryIntentActivities(intent, 0);
-
-            int size = 0;
-
-            if (list != null) {
-                grantUriPermission(list.get(0).activityInfo.packageName, intermediateProvider, Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                size = list.size();
+                }
+                else {
+                    Log.d(TAG, "else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)");
+                    openCamera();
+                }
             }
+        });
+*/
 
-            if (size == 0) {
-                Toast.makeText(this, "Error, wasn't taken image!", Toast.LENGTH_SHORT).show();
-            } else {
-                intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                intent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
-                intent.putExtra("crop", "true");
 
-                intent.putExtra("scale", true);
 
-                File photoFile = getPhotoFileUri(resultName);
-                // wrap File object into a content provider
-                // required for API >= 24
-                // See https://guides.codepath.com/android/Sharing-Content-with-Intents#sharing-files-with-api-24-or-higher
-                resultProvider = FileProvider.getUriForFile(MainActivity.this, "de.androidcrypto.cameracropintent" + ".provider", photoFile);
-                // intermediateProvider = FileProvider.getUriForFile(MainActivity.this, "de.androidcrypto.cameracropintent" + ".provider", imageFile);
-                intent.putExtra("return-data", false);
-                intent.putExtra(MediaStore.EXTRA_OUTPUT, resultProvider);
-                intent.putExtra("outputFormat", Bitmap.CompressFormat.JPEG.toString());
 
-                Intent cropIntent = new Intent(intent);
-                ResolveInfo res = list.get(0);
-                cropIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                cropIntent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
-                grantUriPermission(res.activityInfo.packageName, resultProvider, Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_READ_URI_PERMISSION);
 
-                cropIntent.setComponent(new ComponentName(res.activityInfo.packageName, res.activityInfo.name));
-                cropActivityResultLauncher.launch(cropIntent);
+
+
+
+
+
+        btn03.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                // take a photo in full resolution and view in gallery
+                context = v.getContext();
+                //verifyPermissionsLow();
+                dispatchTakePictureIntentFullGallery();
             }
-        } else {
-            File photoFile = getPhotoFileUri(resultName);
-            resultProvider = Uri.fromFile(photoFile);
+        });
 
-            Intent intentCrop = new Intent("com.android.camera.action.CROP");
-            intentCrop.setFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
-            intentCrop.setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            intentCrop.setDataAndType(intermediateProvider, "image/*");
-            intentCrop.putExtra("crop", "true");
-            intentCrop.putExtra("scale", true);
-            intentCrop.putExtra("outputFormat", Bitmap.CompressFormat.JPEG.toString());
-            intentCrop.putExtra("noFaceDetection", true);
-            intentCrop.putExtra("return-data", false);
-            intentCrop.putExtra(MediaStore.EXTRA_OUTPUT, resultProvider);
-            cropActivityResultLauncher.launch(intentCrop);
-        }
-    }
 
-    // Returns the File for a photo stored on disk given the fileName
-    public File getPhotoFileUri(String fileName) {
-        File mediaStorageDir = new File(getExternalFilesDir(""), APP_TAG);
-        if (!mediaStorageDir.exists() && !mediaStorageDir.mkdirs()) {
-            Log.d(APP_TAG, "failed to create directory");
-        }
-        File file = new File(mediaStorageDir.getPath() + File.separator + fileName);
-        return file;
-    }
 
-    public Bitmap loadFromUri(Uri photoUri) {
-        Bitmap image = null;
-        try {
-            if (Build.VERSION.SDK_INT > Build.VERSION_CODES.O_MR1) {
-                // on newer versions of Android, use the new decodeBitmap method
-                ImageDecoder.Source source = ImageDecoder.createSource(this.getContentResolver(), photoUri);
-                image = ImageDecoder.decodeBitmap(source);
-            } else {
-                // support older versions of Android by using getBitmap
-                image = MediaStore.Images.Media.getBitmap(this.getContentResolver(), photoUri);
+
+
+
+        btn01.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                // Capture a picture and return it
+                // https://developer.android.com/guide/components/intents-common
+                // https://developer.android.com/reference/android/provider/MediaStore#constants_1
+                // https://developer.android.com/training/camera/photobasics
+                /*
+                <uses-feature android:name="android.hardware.camera"
+                  android:required="true" />
+                 */
+                /*
+                If your application uses, but does not require a camera in order to function,
+                instead set android:required to false. In doing so, Google Play will allow
+                devices without a camera to download your application. It's then your
+                responsibility to check for the availability of the camera at runtime by
+                calling hasSystemFeature(PackageManager.FEATURE_CAMERA_ANY). If a camera is
+                not available, you should then disable your camera features.
+                 */
+                /*
+                <intent-filter>
+        <action android:name="android.media.action.IMAGE_CAPTURE" />
+        <category android:name="android.intent.category.DEFAULT" />
+    </intent-filter>
+                 */
+                /*
+                On Android 9 (API level 28) and lower, reading and writing to this directory
+                requires the READ_EXTERNAL_STORAGE and WRITE_EXTERNAL_STORAGE permissions,
+                respectively:
+                <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+                 */
+                /*
+                <provider
+        android:name="androidx.core.content.FileProvider"
+        android:authorities="de.androidcrypto.androidcommonintents.fileprovider"
+        android:exported="false"
+        android:grantUriPermissions="true">
+        <meta-data
+            android:name="android.support.FILE_PROVIDER_PATHS"
+            android:resource="@xml/file_paths"></meta-data>
+    </provider>
+                 */
+
+                System.out.println("### 01 take a photo");
+                // https://developer.android.com/training/camera/photobasics
+                Intent takePictureIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+                try {
+                    takePictureThumbnailActivityResultLauncher.launch(takePictureIntent);
+                } catch (ActivityNotFoundException e) {
+                    // display error state to the user
+                }
             }
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        return image;
+        });
+
+        btn02.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                /*
+                application
+                    android:requestLegacyExternalStorage="true"
+                 */
+                System.out.println("### 02 take a photo full");
+                dispatchTakePictureAppStorageIntent();
+            }
+        });
+
+        btn03.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                // take a photo in full resolution and view in gallery
+                context = v.getContext();
+                verifyPermissions();
+            }
+        });
+
+        btn04.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                // Capture a video and return it
+                // ACTION_IMAGE_CAPTURE_SECURE
+                // https://developer.android.com/reference/android/provider/MediaStore#ACTION_IMAGE_CAPTURE_SECURE
+                // https://developer.android.com/reference/android/os/Environment
+                context = v.getContext();
+                verifyPermissionsVideo();
+            }
+        });
+
+        btn05.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                // open the gallery
+                Intent intent = new Intent();
+                intent.setAction(Intent.ACTION_VIEW);
+                intent.setType("image/*");
+                intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(intent);
+            }
+        });
+
+        btn06.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                // open the gallery and pick a file
+                // create an instance of the
+                // intent of the type image
+                Intent i = new Intent();
+                // this is for images only
+                i.setType("image/*");
+                // this is for videos only
+                //i.setType("video/*");
+                i.setAction(Intent.ACTION_GET_CONTENT);
+                selectFileFromGalleryActivityResultLauncher.launch(i);
+            }
+        });
+
+        btn07.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+
+            }
+        });
+
+        btn08.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+
+            }
+        });
     }
-
-    private void saveBitmapFileToIntermediate(Uri sourceUri) {
-        Log.d(TAG, "saveBitmapFileToIntermediate for URI: " + sourceUri);
-        try {
-            Bitmap bitmap = loadFromUri(sourceUri);
-
-            File imageFile = getPhotoFileUri(intermediateName);
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N)
-                //intermediateProvider = FileProvider.getUriForFile(MainActivity.this, context.getPackageName() + ".provider", imageFile);
-                intermediateProvider = FileProvider.getUriForFile(MainActivity.this, "de.androidcrypto.cameracropintent" + ".provider", imageFile);
-            //de.androidcrypto.cameracropintent
-            else
-                intermediateProvider = Uri.fromFile(imageFile);
-
-            OutputStream out = new FileOutputStream(imageFile);
-            bitmap.compress(Bitmap.CompressFormat.JPEG, 100, out);
-            out.close();
-            Log.d(TAG, "intermediate file written to intermediateProvider: " + intermediateName);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    public Bitmap getResizedBitmap(Bitmap image, int maxSize) {
-        int width = image.getWidth();
-        int height = image.getHeight();
-
-        float bitmapRatio = (float) width / (float) height;
-        if (bitmapRatio > 1) {
-            width = maxSize;
-            height = (int) (width / bitmapRatio);
-        } else {
-            height = maxSize;
-            width = (int) (height * bitmapRatio);
-        }
-        return Bitmap.createScaledBitmap(image, width, height, true);
-    }
-
 
     // gallery opener
-/*
+
     ActivityResultLauncher<Intent> galleryActivityResultLauncher = registerForActivityResult(
             new ActivityResultContracts.StartActivityForResult(),
             new ActivityResultCallback<ActivityResult>() {
@@ -427,7 +343,7 @@ public class MainActivity extends AppCompatActivity {
                     }
                 }
             });
-*/
+
     // camera activity
 
     private void openCamera() {
@@ -442,34 +358,33 @@ public class MainActivity extends AppCompatActivity {
         cameraActivityResultLauncher.launch(cameraIntent);
     }
 
-    /*
-        ActivityResultLauncher<Intent> cameraActivityResultLauncher = registerForActivityResult(
-                new ActivityResultContracts.StartActivityForResult(),
-                new ActivityResultCallback<ActivityResult>() {
-                    @Override
-                    public void onActivityResult(ActivityResult result) {
-                        Log.d(TAG, "ActivityResultLauncher<Intent> cameraActivityResultLauncher");
-                        if (result.getResultCode() == Activity.RESULT_OK) {
-                            Log.d(TAG, "if (result.getResultCode() == Activity.RESULT_OK)");
-                            Log.d(TAG, "image_uri: " + imageUriFull);
+    ActivityResultLauncher<Intent> cameraActivityResultLauncher = registerForActivityResult(
+            new ActivityResultContracts.StartActivityForResult(),
+            new ActivityResultCallback<ActivityResult>() {
+                @Override
+                public void onActivityResult(ActivityResult result) {
+                    Log.d(TAG, "ActivityResultLauncher<Intent> cameraActivityResultLauncher");
+                    if (result.getResultCode() == Activity.RESULT_OK) {
+                        Log.d(TAG, "if (result.getResultCode() == Activity.RESULT_OK)");
+                        Log.d(TAG, "image_uri: " + imageUriFull);
 
-                            Bitmap inputImage = uriToBitmap(imageUriFull);
-                            Bitmap rotated = rotateBitmap(inputImage, getCameraOrientation());
-                            ivFull.setImageBitmap(rotated);
+                        Bitmap inputImage = uriToBitmap(imageUriFull);
+                        Bitmap rotated = rotateBitmap(inputImage, getCameraOrientation());
+                        ivFull.setImageBitmap(rotated);
 
-                            //ivG02.setImageURI(image_uri);
-                            int height = ivFull.getHeight();
-                            int width = ivFull.getWidth();
-                            String imageInfo = "height: " + height + " width: " + width + " resolution: " + (height * width) +
-                                    "\nOriginal Bitmap height: " + inputImage.getHeight() + " width: " + inputImage.getWidth() +
-                                    " res: " + (inputImage.getHeight() * inputImage.getWidth());
-                            tvFull.setText(imageInfo);
+                        //ivG02.setImageURI(image_uri);
+                        int height = ivFull.getHeight();
+                        int width = ivFull.getWidth();
+                        String imageInfo = "height: " + height + " width: " + width + " resolution: " + (height * width) +
+                                "\nOriginal Bitmap height: " + inputImage.getHeight() + " width: " + inputImage.getWidth() +
+                                " res: " + (inputImage.getHeight() * inputImage.getWidth());
+                        tvFull.setText(imageInfo);
 
-                            imageUriFullCached = getImageUri(getApplicationContext(), uriToBitmap(imageUriFull));
-                        }
+                        imageUriFullCached = getImageUri(getApplicationContext(), uriToBitmap(imageUriFull));
                     }
-                });
-    */
+                }
+            });
+
     //TODO takes URI of the image and returns bitmap
     private Bitmap uriToBitmap(Uri selectedFileUri) {
         try {
@@ -486,13 +401,13 @@ public class MainActivity extends AppCompatActivity {
             e.printStackTrace();
         }
         Log.d(TAG, "return null");
-        return null;
+        return  null;
     }
 
     //TODO rotate image if image captured on samsung devices
     //TODO Most phone cameras are landscape, meaning if you take the photo in portrait, the resulting photos will be rotated 90 degrees.
     @SuppressLint("Range")
-    public Bitmap rotateBitmap(Bitmap input) {
+    public Bitmap rotateBitmap(Bitmap input){
         Log.d(TAG, "rotateBitmap");
         String[] orientationColumn = {MediaStore.Images.Media.ORIENTATION};
         Cursor cur = getContentResolver().query(image_uri, orientationColumn, null, null, null);
@@ -500,11 +415,11 @@ public class MainActivity extends AppCompatActivity {
         if (cur != null && cur.moveToFirst()) {
             orientation = cur.getInt(cur.getColumnIndex(orientationColumn[0]));
         }
-        Log.d(TAG, "tryOrientation: " + orientation + "");
+        Log.d(TAG, "tryOrientation: " + orientation+"");
         Matrix rotationMatrix = new Matrix();
         rotationMatrix.setRotate(orientation);
         Log.d(TAG, "before Bitmap cropped");
-        Bitmap cropped = Bitmap.createBitmap(input, 0, 0, input.getWidth(), input.getHeight(), rotationMatrix, true);
+        Bitmap cropped = Bitmap.createBitmap(input,0,0, input.getWidth(), input.getHeight(), rotationMatrix, true);
         return cropped;
     }
 
@@ -527,23 +442,24 @@ Range of valid values:
 
 This key is available on all devices.
      */
-    public Bitmap rotateBitmap(Bitmap input, int orientation) {
+    public Bitmap rotateBitmap(Bitmap input, int orientation){
         Log.d(TAG, "rotateBitmap");
         Matrix rotationMatrix = new Matrix();
         rotationMatrix.setRotate(orientation);
         Log.d(TAG, "before Bitmap cropped");
-        return Bitmap.createBitmap(input, 0, 0, input.getWidth(), input.getHeight(), rotationMatrix, true);
+        return Bitmap.createBitmap(input,0,0, input.getWidth(), input.getHeight(), rotationMatrix, true);
     }
 
-    private int getCameraOrientation() {
+    private int getCameraOrientation(){
         CameraManager manager = (CameraManager) getSystemService(Context.CAMERA_SERVICE);
         int orientation = 0;
         try {
             String cameraId = manager.getCameraIdList()[0];
             CameraCharacteristics characteristics = manager.getCameraCharacteristics(cameraId);
             orientation = characteristics.get(CameraCharacteristics.SENSOR_ORIENTATION);
-        } catch (Exception e) {
-            Log.e(TAG, "Exception: " + e.getMessage());
+        }
+        catch (Exception e) {
+                Log.e(TAG, "Exception: " + e.getMessage());
         }
         return orientation;
     }
@@ -570,6 +486,7 @@ This key is available on all devices.
         cropIntent.putExtra("return-data", true);
         Log.d(TAG, "cropTheImage call cropImageActivityResultLauncher");
         cropImageActivityResultLauncher.launch(cropIntent);
+
 
 
         //intent.setType("image/*");
@@ -650,6 +567,7 @@ This key is available on all devices.
             });
 
 
+
     // take a photo and show in gallery start
 
     private void askPermissions() {
@@ -657,22 +575,11 @@ This key is available on all devices.
         //TODO ask for permission of camera upon first launch of application
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             Log.d(TAG, "if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)");
-
-            if (Build.VERSION.SDK_INT <= 32) {
-                Log.d(TAG, "Build.VERSION.SDK_INT <= 32");
-                if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_DENIED || checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)
-                        == PackageManager.PERMISSION_DENIED) {
-                    Log.d(TAG, "if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_DENIED");
-                    String[] permission = {Manifest.permission.CAMERA, Manifest.permission.WRITE_EXTERNAL_STORAGE};
-                    requestPermissions(permission, 112);
-                }
-            } else {
-                Log.d(TAG, "Build.VERSION.SDK_INT > 32");
-                if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_DENIED) {
-                    Log.d(TAG, "if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_DENIED");
-                    String[] permission = {Manifest.permission.CAMERA};
-                    requestPermissions(permission, 112);
-                }
+            if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_DENIED || checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                    == PackageManager.PERMISSION_DENIED){
+                Log.d(TAG, "if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_DENIED");
+                String[] permission = {Manifest.permission.CAMERA, Manifest.permission.WRITE_EXTERNAL_STORAGE};
+                requestPermissions(permission, 112);
             }
         }
     }
@@ -684,7 +591,7 @@ This key is available on all devices.
 
         if (ContextCompat.checkSelfPermission(this.getApplicationContext(),
                 permissions[0]) == PackageManager.PERMISSION_GRANTED
-        ) {
+                ) {
             dispatchTakePictureIntentFullGallery();
         } else {
             ActivityCompat.requestPermissions(this,
@@ -762,11 +669,8 @@ This key is available on all devices.
             // Continue only if the File was successfully created
             if (photoFile != null) {
                 Uri photoURI = FileProvider.getUriForFile(this,
-                        "de.androidcrypto.cameracropintent" + ".provider",
+                        "de.androidcrypto.androidcommonintents.fileprovider",
                         photoFile);
-
-                // intermediateProvider = FileProvider.getUriForFile(MainActivity.this, "de.androidcrypto.cameracropintent" + ".provider", imageFile);
-
                 takePictureIntent.putExtra(MediaStore.EXTRA_OUTPUT, photoURI);
                 // deprecated startActivityForResult(takePictureIntent, CAMERA_REQUEST_CODE);
                 takePictureFullGalleryActivityResultLauncher.launch(takePictureIntent);
@@ -796,6 +700,16 @@ This key is available on all devices.
 
 
     // section take a photo in full resolution and store in external app's public directory end
+
+
+
+
+
+
+
+
+
+
 
 
     // section take photo as thumbnail start
@@ -855,9 +769,8 @@ This key is available on all devices.
             if (photoFile != null) {
                 System.out.println("photoFile created");
                 Uri photoURI = FileProvider.getUriForFile(this,
-                        "de.androidcrypto.cameracropintent" + ".provider",
+                        "de.androidcrypto.androidcommonintents.fileprovider",
                         photoFile);
-                // intermediateProvider = FileProvider.getUriForFile(MainActivity.this, "de.androidcrypto.cameracropintent" + ".provider", imageFile);
                 System.out.println("uri: " + photoURI.toString());
                 takePictureIntent.putExtra(MediaStore.EXTRA_OUTPUT, photoURI);
                 //Intent takePictureIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
@@ -892,7 +805,7 @@ This key is available on all devices.
     private void setPic() {
         System.out.println("galleryAddPic currentPhotoPath: " + currentPhotoPath);
         Bitmap bm = BitmapFactory.decodeFile(currentPhotoPath);
-        String info = "setPic height: " + bm.getHeight() + " width: " + bm.getWidth();
+        String info = "setPic height: "  + bm.getHeight() + " width: " + bm.getWidth();
         tvG02.setText(info);
         // Get the dimensions of the View
         int targetW = ivG02.getWidth();
@@ -908,7 +821,7 @@ This key is available on all devices.
         int photoH = bmOptions.outHeight;
 
         // Determine how much to scale down the image
-        int scaleFactor = Math.max(1, Math.min(photoW / targetW, photoH / targetH));
+        int scaleFactor = Math.max(1, Math.min(photoW/targetW, photoH/targetH));
 
         // Decode the image file into a Bitmap sized to fill the View
         bmOptions.inJustDecodeBounds = false;
@@ -920,6 +833,7 @@ This key is available on all devices.
     }
 
     // section take a photo in full resolution and store in external app's directory end
+
 
 
     // section take a video in full resolution and store in external app's public directory start
