@@ -82,6 +82,8 @@ public class MainActivityV2 extends AppCompatActivity {
         tvFull = findViewById(R.id.tvFull);
         tvCrop = findViewById(R.id.tvCrop);
 
+
+        /*
         btn01 = findViewById(R.id.btnG02B01);
         btn02 = findViewById(R.id.btnG02B02);
         btn03 = findViewById(R.id.btnG02B03); // take a photo via intent and full resolution
@@ -93,7 +95,7 @@ public class MainActivityV2 extends AppCompatActivity {
 
         tvG02 = findViewById(R.id.tvG02);
         ivG02 = findViewById(R.id.ivG02);
-
+*/
         askPermissions();
         /*
         WRITE_EXTERNAL_STORAGE is deprecated (and is not granted) when targeting Android 13+.

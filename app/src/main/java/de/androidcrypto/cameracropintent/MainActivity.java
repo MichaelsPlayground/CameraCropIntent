@@ -5,6 +5,7 @@ import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.ActivityNotFoundException;
 import android.content.ComponentName;
+import android.content.ContentResolver;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
@@ -52,11 +53,12 @@ import java.io.OutputStream;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
+import java.util.Objects;
 
 public class MainActivity extends AppCompatActivity {
 
     private final String TAG = "MainActivity";
-    private Button openFromGallery, takePhoto, cropImage;
+    private Button openFromGallery, takePhoto, cropImage, saveCropImage;
     private ImageView ivFull, ivCrop;
     private TextView tvFull, tvCrop;
 
@@ -100,22 +102,11 @@ public class MainActivity extends AppCompatActivity {
         openFromGallery = findViewById(R.id.btnOpenGallery);
         takePhoto = findViewById(R.id.btnTakePhoto);
         cropImage = findViewById(R.id.btnCropPhoto);
+        saveCropImage = findViewById(R.id.btnSaveCropPhoto);
         ivFull = findViewById(R.id.ivFull);
         ivCrop = findViewById(R.id.ivCrop);
         tvFull = findViewById(R.id.tvFull);
         tvCrop = findViewById(R.id.tvCrop);
-
-        btn01 = findViewById(R.id.btnG02B01);
-        btn02 = findViewById(R.id.btnG02B02);
-        btn03 = findViewById(R.id.btnG02B03); // take a photo via intent and full resolution
-        btn04 = findViewById(R.id.btnG02B04);
-        btn05 = findViewById(R.id.btnG02B05);
-        btn06 = findViewById(R.id.btnG02B06);
-        btn07 = findViewById(R.id.btnG02B07);
-        btn08 = findViewById(R.id.btnG02B08);
-
-        tvG02 = findViewById(R.id.tvG02);
-        ivG02 = findViewById(R.id.ivG02);
 
         askPermissions();
         /*
@@ -151,14 +142,29 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
+        saveCropImage.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                Log.d(TAG, "saveCropImage");
+                onSaveCroppedImage();
+            }
+        });
+
+
+        /**
+         * section for ActivityResultLauncher
+         */
 
         cameraActivityResultLauncher = registerForActivityResult(
                 new ActivityResultContracts.StartActivityForResult(),
                 result -> {
                     if (result.getResultCode() == Activity.RESULT_OK) {
-                        Bitmap takenImage = loadFromUri(intermediateProvider);
-                        ivFull.setImageBitmap(getResizedBitmap(takenImage, 400));
-                        onCropImage();
+                        Bitmap inputImage = loadFromUri(intermediateProvider);
+                        ivFull.setImageBitmap(getResizedBitmap(inputImage, 400));
+                        String imageInfo = "Cropped Bitmap height: " + cropImage.getHeight() + " width: " + cropImage.getWidth() +
+                                " res: " + (cropImage.getHeight() * cropImage.getWidth());
+                        tvCrop.setText(imageInfo);
+                        //onCropImage();
                     }
                 });
 
@@ -167,10 +173,13 @@ public class MainActivity extends AppCompatActivity {
                 result -> {
                     if (result.getResultCode() == Activity.RESULT_OK && result.getData() != null) {
                         saveBitmapFileToIntermediate(result.getData().getData());
-                        Bitmap selectedImage = loadFromUri(intermediateProvider);
+                        Bitmap inputImage = loadFromUri(intermediateProvider);
 
-                        ivFull.setImageBitmap(getResizedBitmap(selectedImage, 400));
-                        onCropImage();
+                        ivFull.setImageBitmap(getResizedBitmap(inputImage, 400));
+                        String imageInfo = "Cropped Bitmap height: " + cropImage.getHeight() + " width: " + cropImage.getWidth() +
+                                " res: " + (cropImage.getHeight() * cropImage.getWidth());
+                        tvCrop.setText(imageInfo);
+                        //onCropImage();
                     }
                 });
 
@@ -179,8 +188,11 @@ public class MainActivity extends AppCompatActivity {
                 result -> {
                     if (result.getResultCode() == Activity.RESULT_OK) {
                         Bitmap cropImage = loadFromUri(resultProvider);
-
                         ivCrop.setImageBitmap(getResizedBitmap(cropImage, 400));
+                        //Bitmap inputImage = uriToBitmap(imageUriFull);
+                        String imageInfo = "Cropped Bitmap height: " + cropImage.getHeight() + " width: " + cropImage.getWidth() +
+                                " res: " + (cropImage.getHeight() * cropImage.getWidth());
+                        tvCrop.setText(imageInfo);
                     }
                 });
 
@@ -250,26 +262,13 @@ public class MainActivity extends AppCompatActivity {
 
     // Trigger gallery selection for a photo
     public void onPickPhoto() {
-
-
-
         // Launch the photo picker and let the user choose only images.
-        https:
-//developer.android.com/training/data-storage/shared/photopicker
+        https://developer.android.com/training/data-storage/shared/photopicker
 
         pickMediaActivityResultLauncher.launch(new PickVisualMediaRequest.Builder()
                 .setMediaType(ActivityResultContracts.PickVisualMedia.ImageOnly.INSTANCE)
                 .build());
 
-        /*
-        Intent intent = new Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
-        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-        intent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
-        if (intent.resolveActivity(getPackageManager()) != null) {
-            galleryActivityResultLauncher.launch(intent);
-        }
-
-         */
     }
 
     private void onCropImage() {
@@ -331,6 +330,12 @@ public class MainActivity extends AppCompatActivity {
             intentCrop.putExtra(MediaStore.EXTRA_OUTPUT, resultProvider);
             cropActivityResultLauncher.launch(intentCrop);
         }
+    }
+
+    private void onSaveCroppedImage() {
+
+        saveImageToExternalStorage(createImageFileName(true), uriToBitmap(imageUriCrop));
+
     }
 
     // Returns the File for a photo stored on disk given the fileName
@@ -402,6 +407,42 @@ public class MainActivity extends AppCompatActivity {
     }
 
 
+    private boolean saveImageToExternalStorage(String imgName, Bitmap bmp) {
+        // https://www.youtube.com/watch?v=nA4XWsG9IPM
+        Uri imageCollection = null;
+        ContentResolver resolver = getContentResolver();
+        // > SDK 28
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            imageCollection = MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY);
+        } else {
+            imageCollection = MediaStore.Images.Media.EXTERNAL_CONTENT_URI;
+        }
+        ContentValues contentValues = new ContentValues();
+        contentValues.put(MediaStore.Images.Media.DISPLAY_NAME, imgName + ".jpg");
+        contentValues.put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg");
+        Uri imageUri = resolver.insert(imageCollection, contentValues);
+        try {
+            OutputStream outputStream = resolver.openOutputStream(Objects.requireNonNull(imageUri));
+            bmp.compress(Bitmap.CompressFormat.JPEG, 100, outputStream);
+            Objects.requireNonNull(outputStream);
+            return true;
+        } catch (Exception e)  {
+            Toast.makeText(this, "Image not saved: \n" + e, Toast.LENGTH_SHORT).show();
+            e.printStackTrace();
+        }
+        return false;
+    }
+
+    private String createImageFileName(boolean isCropped) {
+        String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
+        String fileName = "";
+        if (isCropped) {
+            fileName = timeStamp + "_cr" + ".jpg";
+        } else {
+            fileName = timeStamp + ".jpg";
+        }
+        return fileName;
+    }
     // gallery opener
 /*
     ActivityResultLauncher<Intent> galleryActivityResultLauncher = registerForActivityResult(

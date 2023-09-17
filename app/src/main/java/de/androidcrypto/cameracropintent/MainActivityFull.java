@@ -70,7 +70,7 @@ public class MainActivityFull extends AppCompatActivity {
         takePhoto = findViewById(R.id.btnTakePhoto);
 Log.d(TAG, "s");
 
-        btn01 = findViewById(R.id.btnG02B01);
+        //btn01 = findViewById(R.id.btnG02B01);
         btn02 = findViewById(R.id.btnG02B02);
         btn03 = findViewById(R.id.btnG02B03); // take a photo via intent and full resolution
         btn04 = findViewById(R.id.btnG02B04);
