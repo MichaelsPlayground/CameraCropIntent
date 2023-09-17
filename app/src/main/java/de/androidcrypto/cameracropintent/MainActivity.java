@@ -335,11 +335,15 @@ public class MainActivity extends AppCompatActivity {
 
     // Returns the File for a photo stored on disk given the fileName
     public File getPhotoFileUri(String fileName) {
-        File mediaStorageDir = new File(getExternalFilesDir(""), APP_TAG);
+        // see https://developer.android.com/reference/androidx/core/content/FileProvider
+        // for correct internal / external naming
+        //File mediaStorageDir = new File(getExternalFilesDir(""), APP_TAG);
+        File mediaStorageDir = new File(getCacheDir(), APP_TAG);
         if (!mediaStorageDir.exists() && !mediaStorageDir.mkdirs()) {
             Log.d(APP_TAG, "failed to create directory");
         }
         File file = new File(mediaStorageDir.getPath() + File.separator + fileName);
+        Log.d(TAG, "getPhotoFileUri for fileName: " + fileName + " is: " + file.getAbsolutePath());
         return file;
     }
 
