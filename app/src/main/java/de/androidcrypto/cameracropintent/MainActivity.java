@@ -31,6 +31,8 @@ import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.ImageView;
+import android.widget.RadioButton;
+import android.widget.RadioGroup;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -67,6 +69,8 @@ public class MainActivity extends AppCompatActivity {
     private Button openFromGallery, takePhoto, saveFullImage, cropImage, saveCropImage;
     private ImageView ivFull, ivCrop;
     private TextView tvFull, tvCrop;
+    private RadioGroup rgChooseCropperApplication;
+    private RadioButton rbChooseCropperApplicationManually, rbChooseCropperApplicationFixed0;
 
     private final String FIXED_IMAGE_EXTENSION = ".jpg";
 
@@ -98,6 +102,9 @@ public class MainActivity extends AppCompatActivity {
         ivCrop = findViewById(R.id.ivCrop);
         tvFull = findViewById(R.id.tvFull);
         tvCrop = findViewById(R.id.tvCrop);
+        rgChooseCropperApplication = findViewById(R.id.rgChooseCropper);
+        rbChooseCropperApplicationManually = findViewById(R.id.rbChooseCropAppplicationManually);
+        rbChooseCropperApplicationFixed0 = findViewById(R.id.rbChooseCropAppplicationFixed0);
 
         askPermissions();
         /*
@@ -288,12 +295,27 @@ res parentActivityName: null
 res name: com.sec.android.gallery3d.app.CropImage
 
  */
-                ResolveInfo res = list.get(1);
+                /*
+                ResolveInfo res = list.get(0);
                 cropIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
                 cropIntent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
                 grantUriPermission(res.activityInfo.packageName, resultProvider, Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_READ_URI_PERMISSION);
-
-                cropIntent.setComponent(new ComponentName(res.activityInfo.packageName, res.activityInfo.name));
+                */
+                if (rbChooseCropperApplicationFixed0.isChecked()) {
+                    ResolveInfo res = list.get(0);
+                    cropIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                    cropIntent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+                    grantUriPermission(res.activityInfo.packageName, resultProvider, Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                    cropIntent.setComponent(new ComponentName(res.activityInfo.packageName, res.activityInfo.name));
+                } else {
+                    // granting the rights for all registered cropping apps
+                    for (int i = 0; i < list.size(); i++) {
+                        ResolveInfo res = list.get(i);
+                        cropIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                        cropIntent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+                        grantUriPermission(res.activityInfo.packageName, resultProvider, Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                    }
+                }
                 cropActivityResultLauncher.launch(cropIntent);
             }
         } else {
@@ -464,10 +486,8 @@ res name: com.sec.android.gallery3d.app.CropImage
                 bmp.compress(Bitmap.CompressFormat.PNG, 100, fileOutputStream);
                 fileOutputStream.flush();
                 fileOutputStream.close();
-
-                // todo update Gallery
+                // update Gallery
                 scanFile(bitmapFile.getAbsolutePath());
-
                 return true;
             } catch (IOException e) {
                 Toast.makeText(this, "Image not saved: \n" + e, Toast.LENGTH_SHORT).show();
@@ -557,6 +577,42 @@ res name: com.sec.android.gallery3d.app.CropImage
         }
         Log.d(TAG, "return null");
         return null;
+    }
+
+    /** checks if here are Android device's cropping applications available
+     * If there is more than 1 application present a radiogroup
+     * If there is no application available disable the cropping related buttons
+      */
+    private void checkForImageCropper(){
+        Intent intent = new Intent("com.android.camera.action.CROP");
+        intent.setDataAndType(intermediateProvider, "image/*");
+        List<ResolveInfo> list = getPackageManager().queryIntentActivities(intent, 0);
+        int size = 0;
+        if (list == null) {
+            cropImage.setEnabled(false);
+            saveCropImage.setEnabled(false);
+            rgChooseCropperApplication.setVisibility(View.GONE);
+            writeToUiToast("There are no cropping applications available, some functions got disabled");
+            return;
+        }
+        size = list.size();
+        if (size == 0) {
+            cropImage.setEnabled(false);
+            saveCropImage.setEnabled(false);
+            rgChooseCropperApplication.setVisibility(View.GONE);
+            writeToUiToast("There are no cropping applications available, some functions got disabled");
+            return;
+        }
+        if (size == 1) {
+            cropImage.setEnabled(true);
+            saveCropImage.setEnabled(true);
+            rbChooseCropperApplicationFixed0.setChecked(true); // there is no chooser, use number 0
+            rgChooseCropperApplication.setVisibility(View.GONE);
+        } else {
+            cropImage.setEnabled(true);
+            saveCropImage.setEnabled(true);
+            rgChooseCropperApplication.setVisibility(View.VISIBLE);
+        }
     }
 
     private void writeToUiToast(String message) {
