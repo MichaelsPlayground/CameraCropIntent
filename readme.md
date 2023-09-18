@@ -8,6 +8,9 @@ This is a sample app showing how to archive these tasks on an Android smartphone
 4) crop the image in full resolution with an installed cropping application (e.g. standard gallery application)
 5) save the cropped image in full resolution to the 'Picture' folder in external storage
 
+The app is based in a lot of parts on a Stackoverflow answer given by user **bigant02** on Sep 20, 2021; 
+this is the  direct link to the answer: https://stackoverflow.com/a/69250082/8166854.
+
 ## 1 load an image from device's gallery using the PhotoPicker in full resolution
 
 The app is using the **PhotoPicker** that was introduced by Google in Android 13 but fortunately this is backported 
@@ -32,7 +35,7 @@ image is shown in the image view (after a previous resizing procedure).
 For further processing (e.g. cropping) a file with the image is stored in the app's cache folder. The image is shown 
 in the image view (after a previous resizing procedure).
 
-# 3 save the image in full resolution to the 'Picture' folder in external storage
+## 3 save the image in full resolution to the 'Picture' folder in external storage
 
 The image shot by action 2 is stored in the external storage folder 'Pictures' in full resolution. The app gives a 
 filename in the format 'YYYYMMDD_HHmmSS.jpg' (e.g. '20230918_132909.jpg').
@@ -135,6 +138,13 @@ Don't forget to place a 'file-paths.xml' file in 'res/xml' folder:
 
 This app is usable for Android SDK version 26+ (Android 8). It is tested on real devices (Samsung) using 
 SDK 26 (Android 8) and SDK 33 (Android 13).
+
+## License
+
+As I took some parts of the code from a StackOverflow answer I'm putting this app in the **Public Domain** 
+without any responsibility for any damage or data loss when using the  app or parts of it.
+
+## Documentation
 
 PhotoPicker documentation: https://developer.android.com/training/data-storage/shared/photopicker
 
