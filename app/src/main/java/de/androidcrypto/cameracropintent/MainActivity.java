@@ -157,7 +157,6 @@ public class MainActivity extends AppCompatActivity {
                     // Callback is invoked after the user selects a media item or closes the
                     // photo picker.
                     if (uri != null) {
-                        Log.d(TAG, "Selected URI: " + uri);
                         imageUriFull = uri;
                         saveBitmapFileToIntermediate(imageUriFull);
 
@@ -250,9 +249,7 @@ public class MainActivity extends AppCompatActivity {
                 intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
                 intent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
                 intent.putExtra("crop", "true");
-
                 intent.putExtra("scale", true);
-
                 File photoFile = getPhotoFileUri(resultName);
                 // wrap File object into a content provider
                 // required for API >= 24
@@ -473,8 +470,8 @@ public class MainActivity extends AppCompatActivity {
         return false;
     }
 
+    // update the gallery index
     private void scanFile(String path) {
-
         MediaScannerConnection.scanFile(MainActivity.this,
                 new String[] { path }, null,
                 new MediaScannerConnection.OnScanCompletedListener() {
@@ -609,7 +606,6 @@ This key is available on all devices.
         Log.d(TAG, "rotateBitmap");
         Matrix rotationMatrix = new Matrix();
         rotationMatrix.setRotate(orientation);
-        Log.d(TAG, "before Bitmap cropped");
         return Bitmap.createBitmap(input, 0, 0, input.getWidth(), input.getHeight(), rotationMatrix, true);
     }
 
@@ -631,7 +627,6 @@ This key is available on all devices.
         //TODO ask for permission of camera upon first launch of application
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             Log.d(TAG, "if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)");
-
             if (Build.VERSION.SDK_INT <= 32) {
                 Log.d(TAG, "Build.VERSION.SDK_INT <= 32");
                 if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_DENIED || checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)
