@@ -8,8 +8,8 @@ This is a sample app showing how to archive these tasks on an Android smartphone
 4) crop the image in full resolution with an installed cropping application (e.g. standard gallery application)
 5) save the cropped image in full resolution to the 'Picture' folder in external storage
 
-The app is based in a lot of parts on a Stackoverflow answer given by user **bigant02** on Sep 20, 2021; 
-this is the  direct link to the answer: https://stackoverflow.com/a/69250082/8166854.
+The app is based in some parts on a Stackoverflow answer given by user **bigant02** on Sep 20, 2021; 
+this is the direct link to the answer: https://stackoverflow.com/a/69250082/8166854.
 
 ## 1 load an image from device's gallery using the PhotoPicker in full resolution
 
@@ -141,8 +141,7 @@ SDK 26 (Android 8) and SDK 33 (Android 13).
 
 ## License
 
-As I took some parts of the code from a StackOverflow answer I'm putting this app in the **Public Domain** 
-without any responsibility for any damage or data loss when using the  app or parts of it.
+This work is licensed under Apache 2.0 license.
 
 ## Documentation
 
