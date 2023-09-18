@@ -3,7 +3,6 @@ package de.androidcrypto.cameracropintent;
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.Activity;
-import android.content.ActivityNotFoundException;
 import android.content.ComponentName;
 import android.content.ContentResolver;
 import android.content.ContentValues;
@@ -25,7 +24,6 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.os.ParcelFileDescriptor;
 import android.provider.MediaStore;
-
 import android.text.TextUtils;
 import android.util.Log;
 import android.view.View;
@@ -36,23 +34,16 @@ import android.widget.RadioGroup;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import androidx.activity.result.ActivityResult;
-import androidx.activity.result.ActivityResultCallback;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.PickVisualMediaRequest;
 import androidx.activity.result.contract.ActivityResultContracts;
-import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.app.ActivityCompat;
-import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
 
-import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileDescriptor;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.OutputStream;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -106,6 +97,7 @@ public class MainActivity extends AppCompatActivity {
         rbChooseCropperApplicationManually = findViewById(R.id.rbChooseCropAppplicationManually);
         rbChooseCropperApplicationFixed0 = findViewById(R.id.rbChooseCropAppplicationFixed0);
 
+        checkForImageCropper();
         askPermissions();
         /*
         WRITE_EXTERNAL_STORAGE is deprecated (and is not granted) when targeting Android 13+.
@@ -172,11 +164,7 @@ public class MainActivity extends AppCompatActivity {
                         Bitmap inputImage = loadFromUri(intermediateProvider);
                         Bitmap rotated = rotateBitmap(getResizedBitmap(inputImage, 800), imageUriFull);
                         ivFull.setImageBitmap(rotated);
-/*
-                        Bitmap inputImage = loadFromUri(intermediateProvider);
-                        Bitmap rotated = rotateBitmap(inputImage, imageUriFull);
-                        ivFull.setImageBitmap(getResizedBitmap(rotated, 800));
-*/
+
                         int height = ivFull.getHeight();
                         int width = ivFull.getWidth();
 
@@ -201,6 +189,7 @@ public class MainActivity extends AppCompatActivity {
                         String imageInfo = "Bitmap height: " + inputImage.getHeight() + " width: " + inputImage.getWidth() +
                                 " res: " + (inputImage.getHeight() * inputImage.getWidth());
                         tvFull.setText(imageInfo);
+                        saveBitmapFileToIntermediate(inputImage);
                     }
                 });
 
@@ -274,33 +263,6 @@ public class MainActivity extends AppCompatActivity {
                 intent.putExtra("outputFormat", Bitmap.CompressFormat.JPEG.toString());
 
                 Intent cropIntent = new Intent(intent);
-
-                Log.e(TAG, "ResolveInfo list size: " + list.size());
-                for (int i = 0; i < list.size(); i++) {
-                    ResolveInfo res = list.get(i);
-                    Log.d(TAG, "res: " + res.toString());
-                    Log.d(TAG, "res processName: " + res.activityInfo.processName);
-                    Log.d(TAG, "res parentActivityName: " + res.activityInfo.parentActivityName);
-                    Log.d(TAG, "res name: " + res.activityInfo.name);
-                }
-/*
-ResolveInfo list size: 2
-res: ResolveInfo{fa9e5c3 com.google.android.apps.photos/.editor.intents.EditActivity m=0x608000}
-res processName: com.google.android.apps.photos
-res parentActivityName: null
-res name: com.google.android.apps.photos.editor.intents.EditActivity
-res: ResolveInfo{72a6e40 com.sec.android.gallery3d/.app.CropImage m=0x608000}
-res processName: com.sec.android.gallery3d:crop
-res parentActivityName: null
-res name: com.sec.android.gallery3d.app.CropImage
-
- */
-                /*
-                ResolveInfo res = list.get(0);
-                cropIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                cropIntent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
-                grantUriPermission(res.activityInfo.packageName, resultProvider, Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                */
                 if (rbChooseCropperApplicationFixed0.isChecked()) {
                     ResolveInfo res = list.get(0);
                     cropIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
@@ -375,8 +337,6 @@ res name: com.sec.android.gallery3d.app.CropImage
     // Returns the File for a photo stored on disk given the fileName
     public File getPhotoFileUri(String fileName) {
         // see https://developer.android.com/reference/androidx/core/content/FileProvider
-        // for correct internal / external naming
-        //File mediaStorageDir = new File(getExternalFilesDir(""), APP_TAG);
         File mediaStorageDir = new File(getCacheDir(), CACHE_FOLDER);
         if (!mediaStorageDir.exists() && !mediaStorageDir.mkdirs()) {
             Log.d(TAG, "failed to create directory");
@@ -404,16 +364,32 @@ res name: com.sec.android.gallery3d.app.CropImage
     }
 
     private void saveBitmapFileToIntermediate(Uri sourceUri) {
-        Log.d(TAG, "saveBitmapFileToIntermediate for URI: " + sourceUri);
+        Log.d(TAG, "saveBitmapFileToIntermediate from URI: " + sourceUri);
         try {
             Bitmap bitmap = loadFromUri(sourceUri);
-
             File imageFile = getPhotoFileUri(intermediateName);
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N)
                 intermediateProvider = FileProvider.getUriForFile(MainActivity.this, FILE_PROVIDER_AUTHORITY + ".provider", imageFile);
             else
                 intermediateProvider = Uri.fromFile(imageFile);
 
+            OutputStream out = new FileOutputStream(imageFile);
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 100, out);
+            out.close();
+            Log.d(TAG, "intermediate file written to intermediateProvider: " + intermediateName);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void saveBitmapFileToIntermediate(Bitmap bitmap) {
+        Log.d(TAG, "saveBitmapFileToIntermediate for bitmap");
+        try {
+            File imageFile = getPhotoFileUri(intermediateName);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N)
+                intermediateProvider = FileProvider.getUriForFile(MainActivity.this, FILE_PROVIDER_AUTHORITY + ".provider", imageFile);
+            else
+                intermediateProvider = Uri.fromFile(imageFile);
             OutputStream out = new FileOutputStream(imageFile);
             bitmap.compress(Bitmap.CompressFormat.JPEG, 100, out);
             out.close();
@@ -509,43 +485,6 @@ res name: com.sec.android.gallery3d.app.CropImage
                 });
     }
 
-    // on Android 8 (< 10) this gives the wrong fileName [not DisplayName] with a long number)
-    private boolean saveImageToExternalStorageOriginal(String imgName, Bitmap bmp) {
-        Log.d(TAG, "saveImageToExternalStorage imgName: " + imgName);
-        if (TextUtils.isEmpty(imgName)) {
-            Log.d(TAG, "imgName is null or empty, aborted");
-            return false;
-        }
-        if (bmp == null) {
-            Log.d(TAG, "bmp is null, aborted");
-            return false;
-        }
-        // https://www.youtube.com/watch?v=nA4XWsG9IPM
-        Uri imageCollection = null;
-        ContentResolver resolver = getContentResolver();
-        // > SDK 28
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            imageCollection = MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY);
-        } else {
-            imageCollection = MediaStore.Images.Media.EXTERNAL_CONTENT_URI;
-        }
-        ContentValues contentValues = new ContentValues();
-        contentValues.put(MediaStore.Images.Media.DISPLAY_NAME, imgName + FIXED_IMAGE_EXTENSION);
-        contentValues.put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg");
-        Uri imageUri = resolver.insert(imageCollection, contentValues);
-        try {
-            OutputStream outputStream = resolver.openOutputStream(Objects.requireNonNull(imageUri));
-            bmp.compress(Bitmap.CompressFormat.JPEG, 100, outputStream);
-            Objects.requireNonNull(outputStream);
-            Log.d(TAG, "the image was stored");
-            return true;
-        } catch (Exception e)  {
-            Toast.makeText(this, "Image not saved: \n" + e, Toast.LENGTH_SHORT).show();
-            e.printStackTrace();
-        }
-        return false;
-    }
-
     // does not add the  file extension to be flexible
     private String createImageFileName(boolean isCropped) {
         String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
@@ -588,6 +527,7 @@ res name: com.sec.android.gallery3d.app.CropImage
         intent.setDataAndType(intermediateProvider, "image/*");
         List<ResolveInfo> list = getPackageManager().queryIntentActivities(intent, 0);
         int size = 0;
+
         if (list == null) {
             cropImage.setEnabled(false);
             saveCropImage.setEnabled(false);
@@ -607,11 +547,18 @@ res name: com.sec.android.gallery3d.app.CropImage
             cropImage.setEnabled(true);
             saveCropImage.setEnabled(true);
             rbChooseCropperApplicationFixed0.setChecked(true); // there is no chooser, use number 0
-            rgChooseCropperApplication.setVisibility(View.GONE);
+            rgChooseCropperApplication.setVisibility(View.VISIBLE);
+            rgChooseCropperApplication.setEnabled(false);
+            rbChooseCropperApplicationFixed0.setEnabled(false);
+            rbChooseCropperApplicationManually.setEnabled(false);
         } else {
             cropImage.setEnabled(true);
             saveCropImage.setEnabled(true);
             rgChooseCropperApplication.setVisibility(View.VISIBLE);
+            rgChooseCropperApplication.setEnabled(true);
+            rbChooseCropperApplicationFixed0.setChecked(true); // default
+            rbChooseCropperApplicationFixed0.setEnabled(true);
+            rbChooseCropperApplicationManually.setEnabled(true);
         }
     }
 
@@ -621,25 +568,6 @@ res name: com.sec.android.gallery3d.app.CropImage
                     message,
                     Toast.LENGTH_SHORT).show();
         });
-    }
-
-    //TODO rotate image if image captured on samsung devices
-    //TODO Most phone cameras are landscape, meaning if you take the photo in portrait, the resulting photos will be rotated 90 degrees.
-    @SuppressLint("Range")
-    public Bitmap rotateBitmap(Bitmap input) {
-        Log.d(TAG, "rotateBitmap");
-        String[] orientationColumn = {MediaStore.Images.Media.ORIENTATION};
-        Cursor cur = getContentResolver().query(imageUriFull, orientationColumn, null, null, null);
-        int orientation = -1;
-        if (cur != null && cur.moveToFirst()) {
-            orientation = cur.getInt(cur.getColumnIndex(orientationColumn[0]));
-        }
-        Log.d(TAG, "tryOrientation: " + orientation + "");
-        Matrix rotationMatrix = new Matrix();
-        rotationMatrix.setRotate(orientation);
-        Log.d(TAG, "before Bitmap cropped");
-        Bitmap cropped = Bitmap.createBitmap(input, 0, 0, input.getWidth(), input.getHeight(), rotationMatrix, true);
-        return cropped;
     }
 
     @SuppressLint("Range")
@@ -657,9 +585,10 @@ res name: com.sec.android.gallery3d.app.CropImage
         return cropped;
     }
 
-    /*
-    https://stackoverflow.com/a/38647301/8166854
-    You can just read the orientation of the camera sensor like indicated by Google in the documentation: https://developer.android.com/reference/android/hardware/camera2/CameraCharacteristics.html
+/*
+https://stackoverflow.com/a/38647301/8166854
+You can just read the orientation of the camera sensor like indicated by Google in the documentation:
+https://developer.android.com/reference/android/hardware/camera2/CameraCharacteristics.html
 
 SENSOR_ORIENTATION
 
@@ -697,66 +626,6 @@ This key is available on all devices.
         return orientation;
     }
 
-    // section take a photo in full resolution and store in external app's public directory start
-
-
-    public Uri getImageUri(Context inContext, Bitmap inImage) {
-        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-        inImage.compress(Bitmap.CompressFormat.JPEG, 100, bytes);
-        String path = MediaStore.Images.Media.insertImage(inContext.getContentResolver(), inImage, "Title", null);
-        return Uri.parse(path);
-    }
-
-    ActivityResultLauncher<Intent> cropImageActivityResultLauncher = registerForActivityResult(
-            new ActivityResultContracts.StartActivityForResult(),
-            new ActivityResultCallback<ActivityResult>() {
-                @Override
-                public void onActivityResult(ActivityResult result) {
-                    Log.d(TAG, "ActivityResultLauncher<Intent> cropImageActivityResultLauncher");
-                    if ((result.getResultCode() == Activity.RESULT_OK) && (result.getData() != null)) {
-                        Log.d(TAG, "if (result.getResultCode() == Activity.RESULT_OK)");
-
-                        // the following code depends on the cropping library in use:
-                        // regular Samsung Gallery = 'Bundle' way
-                        // Google Photos provides an URI
-                        int heightCropped = 0;
-                        int widthCropped = 0;
-                        try {
-                            Bundle bundle = result.getData().getExtras();
-                            Log.d(TAG, "*** regular way, bundle: " + bundle.toString());
-                            Bitmap bitmap = bundle.getParcelable("data");
-                            heightCropped = bitmap.getHeight();
-                            widthCropped = bitmap.getWidth();
-                            ivCrop.setImageBitmap(bitmap);
-                        } catch (NullPointerException npe) {
-                            // the result may contain an Uri
-                            Log.d(TAG, "received a NPE on using Bundle, trying Uri now");
-                            try {
-                                // google photos way
-                                Uri uri = Uri.parse(result.getData().toUri(0));
-                                Bitmap bitmap = MediaStore.Images.Media.getBitmap(getContentResolver(), uri);
-                                ivCrop.setImageBitmap(bitmap);
-
-                                heightCropped = bitmap.getHeight();
-                                widthCropped = bitmap.getWidth();
-                            } catch (Exception e) {
-                                Log.e(TAG, "Received an Exception, aborted: " + e.getMessage());
-                                return;
-                            }
-                        }
-                        int height = ivCrop.getHeight();
-                        int width = ivCrop.getWidth();
-                        String imageInfo = "height: " + height + " width: " + width + " resolution: " + (height * width) +
-                                "\nOriginal Bitmap height: " + heightCropped + " width: " + widthCropped +
-                                " res: " + (heightCropped * widthCropped);
-                        tvCrop.setText(imageInfo);
-                    } else {
-                        Log.e(TAG, "if (result.getResultCode() == Activity.RESULT_NOT OK)");
-                        Log.e(TAG, "resultCode: " + result.toString());
-                    }
-                }
-            });
-
     private void askPermissions() {
         Log.d(TAG, "askPermissions");
         //TODO ask for permission of camera upon first launch of application
@@ -781,5 +650,4 @@ This key is available on all devices.
             }
         }
     }
-
 }

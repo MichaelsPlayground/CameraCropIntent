@@ -59,6 +59,18 @@
 
         </LinearLayout>
 
+        <TextView
+            android:id="@+id/tvWarningFullSave"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:layout_marginTop="8dp"
+            android:layout_marginEnd="8dp"
+            android:textAlignment="center"
+            android:textSize="16sp"
+            android:textColor="#FF0303"
+            android:text="Note: saving images in full resolution may take some seconds while the app gets inactive" />
+
         <RadioGroup
             android:id="@+id/rgChooseCropper"
             android:layout_width="wrap_content"
@@ -71,13 +83,13 @@
                 android:id="@+id/rbChooseCropAppplicationManually"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:checked="true"
                 android:text="choose individually" />
 
             <RadioButton
                 android:id="@+id/rbChooseCropAppplicationFixed0"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:checked="true"
                 android:text="use fixed chooser 0" />
 
         </RadioGroup>
@@ -107,6 +119,18 @@
                 android:text="save cropped image" />
 
         </LinearLayout>
+
+        <TextView
+            android:id="@+id/tvWarningCropSave"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:layout_marginTop="8dp"
+            android:layout_marginEnd="8dp"
+            android:textAlignment="center"
+            android:textSize="16sp"
+            android:textColor="#FF0303"
+            android:text="Note: saving images in full resolution may take some seconds while the app gets inactive" />
 
         <LinearLayout
             android:layout_width="fill_parent"
